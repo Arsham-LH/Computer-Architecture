@@ -1,0 +1,25 @@
+{F:/arsham/TERM 5/Computer Architecture/Lab/Single Cycle MIPS/tb__basic/single_cycle_mips.v} {1 {vlog -work work -vopt -stats=none {F:/arsham/TERM 5/Computer Architecture/Lab/Single Cycle MIPS/tb__basic/single_cycle_mips.v}
+Model Technology ModelSim SE-64 vlog 2020.4 Compiler 2020.10 Oct 13 2020
+-- Compiling module single_cycle_mips
+-- Compiling module my_alu
+
+Top level modules:
+	single_cycle_mips
+
+} {} {}} {F:/arsham/TERM 5/Computer Architecture/Lab/Single Cycle MIPS/tb__basic/single_cycle_mips__tb_basic.v} {1 {vlog -work work -vopt -stats=none {F:/arsham/TERM 5/Computer Architecture/Lab/Single Cycle MIPS/tb__basic/single_cycle_mips__tb_basic.v}
+Model Technology ModelSim SE-64 vlog 2020.4 Compiler 2020.10 Oct 13 2020
+-- Compiling module single_cycle_mips__tb_basic
+
+Top level modules:
+	single_cycle_mips__tb_basic
+
+} {} {}} {F:/arsham/TERM 5/Computer Architecture/Lab/Single Cycle MIPS/tb__basic/building_blocks.v} {1 {vlog -work work -vopt -stats=none {F:/arsham/TERM 5/Computer Architecture/Lab/Single Cycle MIPS/tb__basic/building_blocks.v}
+Model Technology ModelSim SE-64 vlog 2020.4 Compiler 2020.10 Oct 13 2020
+-- Compiling module async_mem
+-- Compiling module reg_file
+
+Top level modules:
+	async_mem
+	reg_file
+
+} {} {}}

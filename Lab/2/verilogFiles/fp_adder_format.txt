@@ -1,0 +1,128 @@
+`timescale 1ns/1ns
+module fp_adder
+#(
+//-----------------------parameter declaration
+    parameter nb=32
+)
+
+(
+//-----------------------Port directions and deceleration
+   input [31:0] A, 
+   input [31:0] B, 
+   output [31:0] s,
+    );
+
+//------------------------------------------------------
+
+
+//----------------------------------- register deceleration
+//-------------------------------------------------------
+
+//------------------------------------- wire deceleration
+wire sign1=A[31];
+wire sign2=B[31];
+
+wire [7:0] E1=A[30:23];
+wire [7:0] E2=B[30:23];
+
+wire [22:0] F1=A[22:0];
+wire [22:0] F2=B[22:0];
+
+
+wire [7:0] init_E1= (E1==8'h00? 8'h01:E1);
+wire [7:0] init_E2= (E2==8'h00? 8'h01:E2);
+
+//Does ** retain zeros before '.' ?
+wire [25:0] init_mantissa1= (E1==8'h00? {1'b0,F1*(2**-23),2'b00}: {1'b1,F1*(2**-23),2'b00}); //including guard & round
+wire [25:0] init_mantissa2= (E2==8'h00? {1'b0,F2*(2**-23),2'b00}: {1'b1,F2*(2**-23),2'b00}); //including guard & round
+
+wire [7:0] smallALU_output;
+wire smallALU_cout;
+{smallALU_cout,smallALU_output}= init_E1 + (~init_E2+1); //computes init_E1-init_E2, with cout=0 showing underflow
+
+wire [25:0] right_mantissa= smallALU_cout? init_mantissa1: init_mantissa2; //bigger number
+wire [25:0] left_mantissa= smallALU_cout? init_mantissa2: init_mantissa1; //smaller number
+
+wire [7:0] right_E= smallALU_cout? init_E1: init_E2; //Final E for adder output
+wire [7:0] left_E= smallALU_cout? init_E2: init_E1;
+
+
+wire [7:0] smallerNum_shift= smallALU_cout? smallALU_output: (~smallALU_output+1); //shift amount for smaller number's mantissa
+
+/* A BETTER WAY TO HANDLE "(smallerNum_shift>5'd26)?" , PROBABLY USING A SEPERATE SUBTRACTER */
+wire left_s= !smallerNum_shift? 1'b0 : (smallerNum_shift>5'd26)? (|left_mantissa): (|left_mantissa[smallerNum_shift-1:0]);  %computing s(or) for smaller number (if shift>26, s equals or on whole digits)
+wire right_s= 1'b0;
+
+wire [25:0] shifted_left_mantissa= !smallerNum_shift? left_mantissa: (left_mantissa>>smallerNum_shift); //shifted mantissa for the left number. Must be added to right_mantissa
+
+//converting to 2cns
+wire [28:0] final_left_mantissa= sign1? ~{2'b00, shifted_left_mantissa, left_s}+(1*(2**-26)) : {2'b00, shifted_left_mantissa, left_s}; //complement if the sign is 1
+wire [28:0] final_right_mantissa= sign2? ~{2'b00, right_mantissa, right_s}+(1*(2**-26)) : {2'b00, right_mantissa, right_s}; //complement if the sign is 1
+
+wire [28:0] adder_output= final_right_mantissa+final_left_mantissa;
+wire output_sign= adder_output[28]; //sign of output
+wire [27:0] adder_mantissa = output_sign? (~adder_output[27:0]+(1*(2**-26))): adder_output[27:0]; //converting adder_output from 2cns to signed number (extracting mantissa), and removing sign bit
+
+//Normalizing number
+wire [27:0] shifted_adder_mantissa= adder_mantissa * (2**-1); //shifting the '.',one bit to the left (Now we have 1 bit before, and 27 bit after the point)
+
+wire [4:0] leadingOne_ind; //index of leading one bit in shifted_adder_mantissa, from 0 to 27 (28 for the case that none of thebits are 1, thus the final result is zero!)
+assign leadingOne_ind= shifted_adder_mantissa[27] ? 27 :
+                       shifted_adder_mantissa[26] ? 26 :
+                       shifted_adder_mantissa[25] ? 25 :
+                       shifted_adder_mantissa[24] ? 24 :
+                       shifted_adder_mantissa[23] ? 23 :
+                       shifted_adder_mantissa[22] ? 22 :
+                       shifted_adder_mantissa[21] ? 21 :
+                       shifted_adder_mantissa[20] ? 20 :
+                       shifted_adder_mantissa[19] ? 19 :
+                       shifted_adder_mantissa[18] ? 18 :
+                       shifted_adder_mantissa[17] ? 17 :
+                       shifted_adder_mantissa[16] ? 16 :
+                       shifted_adder_mantissa[15] ? 15 :
+                       shifted_adder_mantissa[14] ? 14 :
+                       shifted_adder_mantissa[13] ? 13 :
+                       shifted_adder_mantissa[12] ? 12 :
+                       shifted_adder_mantissa[11] ? 11 :
+                       shifted_adder_mantissa[10] ? 10 :
+                       shifted_adder_mantissa[9] ? 9 :
+                       shifted_adder_mantissa[8] ? 8 :
+                       shifted_adder_mantissa[7] ? 7 :
+                       shifted_adder_mantissa[6] ? 6 :
+                       shifted_adder_mantissa[5] ? 5 :
+                       shifted_adder_mantissa[4] ? 4 :
+                       shifted_adder_mantissa[3] ? 3 :
+                       shifted_adder_mantissa[2] ? 2 :
+                       shifted_adder_mantissa[1] ? 1 :
+                       shifted_adder_mantissa[0] ? 0 : 28;
+
+wire [4:0] normal_shift=(leadingOne_ind===5'd28)? 5'd28 : 5'd27-leadingOne_ind; //number of left shift to normalize the mantissa
+wire [7:0] normal_E= (normal_shift===5'd28 || normal_shift > right_E)? 8'h00 : (right_E+1 + (~normal_shift+1)); //output E, after normalization
+
+//normal_mantissa will contain 2 bits before, and 26 bits after '.' (23 bits for F, plus guard, round, s(or) bits)
+wire [27:0] normal_mantissa= (normal_shift===5'd28)? 27'd0 :                                   //27'd0: 27 is because of extending another bit before the point, so we'd have 2 bits before and 26 bits after the point
+                             (normal_shift===5'd0)?  : shifted_adder_mantissa[27:1]            /*if shift amount==0, it means we must shift the main mantissa, one bit right. Thus, the LSB will be removed*/
+                             (normal_shift > right_E)? (shifted_adder_mantissa << right_E)[27:1] : (shifted_adder_mantissa << normal_shift)[27:1];      //[27:1] is because of extending another bit before the point, so we'd have 2 bits before and 26 bits after the point (We won't lose any important bit here, as the [0] bit becomes 0 after the shift!)
+
+//rounding the number
+wire [24:0] rounded_mantissa= (!normal_mantissa[2]) ? normal_mantissa[27:3] : //checking the guard bit
+                  (normal_mantissa[1]) ? normal_mantissa[27:3] + 1*(2**-23) : //checking the round bit
+                  (normal_mantissa[0]) ? normal_mantissa[27:3] + 1*(2**-23) : //checking the s(or) bit
+                  (normal_mantissa[3]) ? normal_mantissa[27:3] + 1*(2**-23) : normal_mantissa[27:3] //rounding to 0 (the even bit)
+
+wire [24:0] final_mantissa= rounded_mantissa[27] ? (rounded_mantissa >> 1) : rounded_mantissa;          //2 bits before, and 26 bits after '.'
+wire [7:0] final_E= rounded_mantissa[27] ? normal_E+1 : normal_E;
+
+assign s={output_sign, final_E, final_mantissa[22:0]};
+//---------------------------------------------------------
+
+
+//-------------------------------------- combinational logic
+//---------------------------------------------------------
+
+
+
+
+
+
+endmodule
